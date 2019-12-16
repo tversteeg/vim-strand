@@ -8,6 +8,9 @@ struct Opts {
     /// Prints out the config file location
     #[structopt(long)]
     config_location: bool,
+
+    #[structopt(subcommand)]
+    cmd: Option<strand::Plugin>,
 }
 
 #[async_std::main]
@@ -24,7 +27,12 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let config = strand::get_config(&config_path).await?;
+    let mut config = strand::get_config(&config_path).await?;
+
+    if let Some(plugin) = opts.cmd {
+        config.plugins.push(plugin);
+        fs::write(&config_path, &yaml::to_string(&config)?).await?;
+    }
 
     // Clean out the plugin directory before installing.
     ensure_empty_dir(&config.plugin_dir).await?;

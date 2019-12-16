@@ -1,10 +1,12 @@
 use anyhow::Result;
 use async_std::task;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     path::{Path, PathBuf},
+    str::FromStr,
 };
+use structopt::StructOpt;
 
 fn get_home_dir() -> PathBuf {
     use std::process;
@@ -60,18 +62,43 @@ fn expand_path(path: &Path) -> PathBuf {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, StructOpt)]
 pub enum GitProvider {
     GitHub,
     Bitbucket,
 }
 
-// git_ref can be a branch name, tag name, or commit hash.
-#[derive(Deserialize)]
+impl FromStr for GitProvider {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "github" => Ok(GitProvider::GitHub),
+            "bitbucket" => Ok(GitProvider::Bitbucket),
+            _ => Err(format!(
+                "Git provider {} not recognised -- try ‘github’ or ‘bitbucket’ instead",
+                s
+            )),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, StructOpt)]
 pub struct GitRepo {
+    /// The Git repo hosting provider; can be either ‘github’ or ‘bitbucket’
+    #[structopt(short, long)]
     provider: GitProvider,
+
+    /// The Git repo owner’s username
+    #[structopt(short, long)]
     user: String,
+
+    /// The Git repo’s name
+    #[structopt(short, long)]
     repo: String,
+
+    /// An optional branch name, tag name, or commit hash
+    #[structopt(short, long)]
     git_ref: Option<String>,
 }
 
@@ -97,19 +124,26 @@ impl fmt::Display for GitRepo {
     }
 }
 
-#[derive(Deserialize)]
-pub struct ArchivePlugin(String);
+#[derive(Serialize, Deserialize, StructOpt)]
+pub struct ArchivePlugin {
+    url: String,
+}
 
 impl fmt::Display for ArchivePlugin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.url)
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, StructOpt)]
 #[serde(untagged)]
 pub enum Plugin {
+    /// Install a Git plugin and append it to the config file
+    #[structopt(name = "install-git")]
     Git(GitRepo),
+
+    /// Install a tar.gz plugin and append it to the config file
+    #[structopt(name = "install-tar")]
     Archive(ArchivePlugin),
 }
 
@@ -141,7 +175,7 @@ impl Plugin {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Config {
     pub plugin_dir: PathBuf,
     pub plugins: Vec<Plugin>,
